@@ -1,6 +1,8 @@
 import bobcat
 import helium
 import _gmail
+import telepot
+import requests
 from utilities import LogFile
 
 import time
@@ -12,6 +14,7 @@ import secrets
 
 secrets = db_actions.secrets()
 
+
 verbose = secrets['verbose']
 send_emails = secrets['send_emails']
 dry_run = secrets['dry_run']
@@ -19,7 +22,12 @@ cache_name = secrets['cache_name']
 log = secrets['log']
 email_to = secrets['email_to']
 sleep = int(secrets['sleep'])
-# print(verbose)
+
+
+def send_msg(message):
+    print(message)
+    bot_url = f"https://api.telegram.org/bot{secrets['bot_token']}/sendMessage?chat_id={secrets['group_id']}&text={message}"
+    resp = requests.get(bot_url)
 
 def initialize():
     ota_current = int(bobcat.bobcat_ota(secrets['cache_ip'])['ota_version_min'])
@@ -40,24 +48,28 @@ def ota_check(ip=secrets['cache_ip']):
     
     if verbose == 'True':
         print(f"   {dt_string} OTA version currently read is {ota_current}")
+
         
     if ota['status_code'] == 200:
         if int(ota_current) > cache_ota_last:
             if dry_run == 'False':
                 bobcat.bobcat_reboot(ip)
                 if verbose == 'True':
-                    print(f"   {dt_string} OTA version increased (v{ota_current}) >>>>> REBOOTING <<<<<")
+                    send_msg(f"   {dt_string} OTA version increased (v{ota_current}) >>>>> REBOOTING <<<<<")
             else:
                 if verbose == 'True':
                     print(f"   {dt_string} OTA version increased (v{ota_current}) >>>>> DRY -- REBOOTING <<<<<")
             if send_emails == 'True':
-                _gmail.send_email("OTA version increased", f"""{dt_string}\n{cache_name}\nOTA version increased (v{ota_current}) \n>>>>> REBOOTING <<<<<""", email_to)
+                text="OTA version increased", f"""{dt_string}\n{cache_name}\nOTA version increased (v{ota_current}) \n>>>>> REBOOTING <<<<<""", email_to
+                _gmail.send_email(text)
                 if verbose == 'True':
                     print(f"   {dt_string} Sending email ...")
             db_actions.insert_ota(ota_current)
     else:
         if verbose == 'True':
-            print(f"   {dt_string} Bobcat hotspot (ota) API not responding")
+            msg=f"   {dt_string} Bobcat hotspot (ota) API not responding"
+            print(msg)
+            send_msg(msg)
 
 # ota_check()
 
@@ -82,18 +94,13 @@ def stale_check(address = secrets['cache_address'], ip=secrets['cache_ip']):
             if dry_run == 'False':
                 bobcat.bobcat_reboot(ip)
                 if verbose == 'True':
-                    print(f"   {dt_string} Hotspot is STALE (0 additional rewards since last check) >>>>> REBOOTING <<<<<")
+                    send_msg(f"   {dt_string} Hotspot is STALE (0 additional rewards since last check) >>>>> REBOOTING <<<<<")
             else:
                 if verbose == 'True':
                     print(f"   {dt_string} Hotspot is STALE (0 additional rewards since last check) >>>>> DRY -- REBOOTING <<<<<")
-            
-            if send_emails == 'True':
-                _gmail.send_email("Hotspot is STALE", f"""{dt_string}\n{cache_name}\nHotspot is STALE (0 additional rewards since last check) \n>>>>> REBOOTING <<<<<""", email_to)
-                if verbose == 'True':
-                    print(f"   {dt_string} Sending email ...")
     else:
         if verbose == 'True':
-            print(f"   {dt_string} Helium API not responding")
+            send_msg(f"   {dt_string} Helium API not responding")
 # stale_check()
 
 # Check for out of sync
@@ -122,7 +129,7 @@ def sync_check(ip=secrets['cache_ip']):
                     print(f"   {dt_string} Sending email ...")
         elif block_gap < 100 and block_gap > 30:
             if verbose == 'True': 
-                print(f"   {dt_string} Hotspot is slightly out of sync (gap = {block_gap}), nothing that can be done...")
+                send_msg(f"   {dt_string} Hotspot is slightly out of sync (gap = {block_gap}), nothing that can be done...")
             # Fast Sync <<<<<>>>>>
             if send_emails == 'True':
                 _gmail.send_email("Hotspot is OUT OF SYNC", f"""{dt_string}\n{cache_name}\nHotspot is slightly OUT OF SYNC (gap = {block_gap}) \nCan't yet use fast sync ... need to wait for 400 blocks gap.""", email_to)  
@@ -132,7 +139,7 @@ def sync_check(ip=secrets['cache_ip']):
             if dry_run == 'False':
                 bobcat.bobcat_fast_sync(ip)
                 if verbose == 'True':
-                    print(f"   {dt_string} Hotspot is OUT OF SYNC (gap = {block_gap}) >>>>> FAST SYNC <<<<<")
+                    send_msg(f"   {dt_string} Hotspot is OUT OF SYNC (gap = {block_gap}) >>>>> FAST SYNC <<<<<")
             else:
                 if verbose == 'True':
                     print(f"   {dt_string} Hotspot is OUT OF SYNC (gap = {block_gap}) >>>>> DRY -- FAST SYNC <<<<<")
@@ -144,7 +151,7 @@ def sync_check(ip=secrets['cache_ip']):
                     print(f"   {dt_string} Sending email ...")      
     else:
         if verbose == True:
-            print(f"   {dt_string} Bobcat hotspot (sync) API not responding")
+            send_msg(f"   {dt_string} Bobcat hotspot (sync) API not responding")
 # sync_check()
 #################################################
 
@@ -154,6 +161,8 @@ if log == 'True':
 # initialize()
 now = datetime.now()
 dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
+send_msg(f"{dt_string} Starting {cache_name}")
 if send_emails == 'True':
     _gmail.send_email(f"ECHO watchdog started at {dt_string}", f"""Hi,\nI'm ECHO the watchdog for your BOBCAT 300 {secrets['cache_name']}.\nEvery {int(secrets['sleep'])/60/60} hours I will check the status.\nIf something important happens I will bark and send you an email.""", email_to)
     if verbose == 'True':

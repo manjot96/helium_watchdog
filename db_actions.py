@@ -6,7 +6,7 @@ watchdog = create_engine('sqlite:///watchdog.db')
 
 folder = os.getcwd()# folder = os.path.dirname(os.path.realpath(__file__))
 
-def secrets(filename=folder+'\secrets.txt', section='helium'):
+def secrets(filename=folder+'/.secret', section='helium'):
     # create a parser
     parser = ConfigParser()
     # read config file
